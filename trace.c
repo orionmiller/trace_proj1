@@ -4,6 +4,9 @@
 #include <string.h>
 #include <netinet/ether.h>
 #include <stdint.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 #define END_OF_PCAP_FILE -2
 
@@ -14,8 +17,8 @@
 #define TOTAL_LEN_LEN 16
 #define ARP_HDR_IPV4_SIZE 224 //in bytes
 
-#define IDENTIFCATION_LEN 1 //INCORECCT FIIIXXX
-#define FLAG_LEN 4 //FIIIIIIIIIIIIIIIX
+#define IDENTIFCATION_LEN 16
+#define FLAG_LEN 3
 
 typedef struct {
   unsigned char mac_dst[MAC_ADDR_LEN]; //magic numbers
@@ -24,22 +27,48 @@ typedef struct {
 }ether_hdr;
 
 typedef struct {
-  unsigned char version;
-  unsigned char header_length;
-  unsigned char type_of_service[TOS_LEN];
-  unsigned char explicit_congestion_notif[ECN_LEN];
-  unsigned char total_len[TOTAL_LEN_LEN]; //WTF RETARDED #DEFINE
-  unsigned char identification[IDENTIFCATION_LEN];
-  unsigned char flags[FLAG_LEN];
-  unsigned char fragment_offset;
-  unsigned char time_to_live;
-  unsigned char protocol;
-  unsigned char checksum;
-  unsigned char ip_addr_src;
-  unsigned char ip_addr_dst;
-  unsigned char options; //if header length > 5 -- not sure if needed
+  uint8_t version;
+  uint8_t hdr_len;
+  uint8_t tos[TOS_LEN]; //type_of_service
+  uint8_t ecn[ECN_LEN]; //explicit_congestion_notification
+  uint8_t total_len[TOTAL_LEN_LEN]; //WTF RETARDED #DEFINE
+  uint8_t identification[IDENTIFCATION_LEN];
+  uint8_t flags[FLAG_LEN];
+  uint8_t fragment_offset;
+  uint8_t time_to_live;
+  uint8_t protocol;
+  uint8_t checksum;
+  uint8_t ip_addr_src;
+  uint8_t ip_addr_dst;
+  uint8_t options; //if header length > 5 -- not sure if needed
   const u_char *data;
 }ip_hdr;
+
+ether_hdr *get_ethernet_hdr(const u_char *pkt_data_pos)
+{
+
+  uint32_t offset = 0;
+  //needs to be redone properly since structures can be padded
+  ip_hdr *Ip_Hdr = safe_malloc(sizeof(ip_hdr));
+
+  memcpy(&(Ip_Hdr->version), pkt_data_pos + offset, sizeof(uint8_t));
+  offset += sizeof(uint8_t);
+
+  memcpy(&(Ip_Hdr->hdr_len), pkt_data_pos + offset, sizeof(uint8_t));
+  offset += sizeof(uint8_t);
+
+  memcpy(&(Ip_Hdr->tos), pkt_data_pos + offset, sizeof(uint8_t)*TOS_LEN);
+  offset += sizeof(uint8_t) * TOS_LEN;
+
+  memcpy(&(Ip_Hdr->ecn), pkt_data_pos + offset, sizeof(uint8_t)*ECN_LEN);
+  offset += sizeof(uint8_t) * ECN_LEN;
+
+
+
+
+
+  return Ip_Hdr;
+}
 
 
 typedef struct{
@@ -48,10 +77,10 @@ typedef struct{
   uint8_t hlen; //Hardware Address Length
   uint8_t plen; //protocol address length
   uint16_t opcode; //operation
-  uint32_t sha; //sender hardware address
-  uint32_t spa; //sender protocol address
-  uint32_t tha; //target hardware address
-  uint32_t tpa; //target protocol address
+  uint8_t sha[MAC_ADDR_LEN]; //sender hardware address -- MAC Address
+  uint32_t spa; //sender protocol address -- IP Address
+  uint32_t tha[MAC_ADDR_LEN]; //target hardware address -- MAC Address
+  uint32_t tpa; //target protocol address -- IP Address
 }arp_hdr;
 
 
@@ -85,55 +114,113 @@ ip_hdr *get_ip_hdr(const u_char *pkt_data_pos)
   return NULL;
 }
 
+char *print_ip_addr(const u_char *addr_binary)
+{
+  struct in_addr in;
+  memcpy(&(in.s_addr), addr_binary, sizeof(uint32_t));
+  return inet_ntoa(in);
+}
+
 char *print_mac_addr(const u_char *addr_binary)
 {
   struct ether_addr addr;
-  memcpy(&addr, addr_binary, MAC_ADDR_LEN);
+  memcpy(&addr, addr_binary, MAC_ADDR_LEN); //done incorrectly fix
   return ether_ntoa(&addr);
 }
 
-
 void print_ethernet_hdr(ether_hdr *Ether_Hdr)
 {
-  printf("Ethernet Header Output:\n");
-  printf("Dest MAC: %s\n", print_mac_addr(Ether_Hdr->mac_dst));
-  printf("Sourc MAC: %s\n",print_mac_addr(Ether_Hdr->mac_src));
-  printf("Type: %u\n", (unsigned int)Ether_Hdr->type); //may cause issues
+  printf("\tEthernet Header\n");
+  printf("\t\tDest MAC: %s\n", print_mac_addr(Ether_Hdr->mac_dst));
+  printf("\t\tSource MAC: %s\n",print_mac_addr(Ether_Hdr->mac_src));
+  printf("\t\tType: %u\n", (unsigned int)Ether_Hdr->type); //may cause issues
   printf("\n");
 }
+
+/* typedef struct{ */
+/*   uint16_t hardware_type; //network protocol type ex. ether is 1 */
+/*   uint16_t protocol_type; //i think supposed to be value 0x0800 */
+/*   uint8_t hlen; //Hardware Address Length */
+/*   uint8_t plen; //protocol address length */
+/*   uint16_t opcode; //operation */
+/*   uint32_t sha; //sender hardware address */
+/*   uint32_t spa; //sender protocol address */
+/*   uint32_t tha; //target hardware address */
+/*   uint32_t tpa; //target protocol address */
+/* }arp_hdr; */
 
 arp_hdr *get_arp_hdr(const u_char *pkt_data_pos)
 {
   uint32_t offset = 0;
-  arp_hdr *Arp_Hdr = safe_malloc(ARP_HDR_IPV4_SIZE);
+  arp_hdr *Arp_Hdr = safe_malloc(sizeof(arp_hdr));
   memcpy(&(Arp_Hdr->hardware_type), pkt_data_pos + offset, sizeof(uint16_t));
   offset += sizeof(uint16_t);
+  
   memcpy(&(Arp_Hdr->protocol_type), pkt_data_pos + offset, sizeof(uint16_t));
   offset += sizeof(uint16_t);
+  
   memcpy(&(Arp_Hdr->hlen), pkt_data_pos + offset, sizeof(uint8_t));
   offset += sizeof(uint8_t);
+  
   memcpy(&(Arp_Hdr->plen), pkt_data_pos + offset, sizeof(uint8_t));
   offset += sizeof(uint8_t);
+  
   memcpy(&(Arp_Hdr->opcode), pkt_data_pos + offset, sizeof(uint16_t));
-  offset += sizeof(uint32_t);
+  offset += sizeof(uint16_t);
+  
   memcpy(&(Arp_Hdr->sha), pkt_data_pos + offset, sizeof(uint32_t));
-  offset += sizeof(uint32_t);
+  offset += MAC_ADDR_LEN;
+  
   memcpy(&(Arp_Hdr->spa), pkt_data_pos + offset, sizeof(uint32_t));
   offset += sizeof(uint32_t);
+
   memcpy(&(Arp_Hdr->tha), pkt_data_pos + offset, sizeof(uint32_t));
-  offset += sizeof(uint32_t);
+  offset += MAC_ADDR_LEN;
+
   memcpy(&(Arp_Hdr->tpa), pkt_data_pos + offset, sizeof(uint32_t));
 
   return Arp_Hdr;
 }
 
+typedef struct {
+  uint16_t src_port;
+  uint16_t dst_port;
+  uint16_t len;
+  uint16_t cheksum;
+  uint32_t data;
+}udp_hdr;
+
+upd_hdr *get_udp_hdr(const u_char *pkt_data_pos)
+{
+  uint32_t offset = 0;
+  upd_hdr *Udp_Hdr = safe_malloc(sizeof(udp_hdr));
+  
+  memcpy(&(Udp_Hdr->src_port), pkt_data_pos + offset, sizeof(uint16_t)); //in network order
+  offset += sizeof(uint16_t);
+
+  memcpy(&(Udp_Hdr->dst_port), pkt_data_pos + offset, sizeof(uint16_t)); //in network order
+  offset += sizeof(uint16_t);
+
+  memcpy(&(Udp_Hdr->len), pkt_data_pos + offset, sizeof(uint16_t));
+  offset += sizeof(uint16_t);
+
+  memcpy(&(Udp_Hdr->cheksum), pkt_data_pos + offset, sizeof(uint16_t));
+  offset += sizeof(uint16_t);
+
+  memcpy(&(Udp_Hdr->data), pkt_data_pos + offset, sizeof(uint32_t));
+
+  return Udp_Hdr;
+}
+
 void print_arp_hdr(arp_hdr *Arp_Hdr)
 {
-  printf("Opcode: %u\n", (unsigned int)(Arp_Hdr->opcode));
-  printf("Sender MAC: %s\n", print_mac_addr((const u_char *)&(Arp_Hdr->sha)));
-  printf("Sender IP: \n");
-  printf("Target MAC: %s\n", print_mac_addr((const u_char *)&(Arp_Hdr->tha)));
-  printf("Target IP: \n");
+  printf("\tARP Header\n");
+  printf("\t\tOpcode: %u\n", (unsigned int)(Arp_Hdr->opcode));
+  printf("\t\tSender MAC: %s\n", print_mac_addr((const u_char *)&(Arp_Hdr->sha)));
+  printf("\t\tSender IP: %s\n", print_ip_addr((const u_char *)&(Arp_Hdr->spa)));
+  printf("\t\tTarget MAC: %s\n", print_mac_addr((const u_char *)&(Arp_Hdr->tha)));
+  printf("\t\tTarget IP: %s\n", print_ip_addr((const u_char *)&(Arp_Hdr->tpa)));
+  printf("\n");
 }
 
 
@@ -152,7 +239,7 @@ int main(int argc, char *argv[])
   arp_hdr *Arp_Hdr;
 
 
-  if (argc != 2) 
+  if (argc != 2) //magic number
     {
       printf("usage: ./trace <pcap_file>\n");
       exit(EXIT_SUCCESS);
@@ -171,8 +258,9 @@ int main(int argc, char *argv[])
   printf("successfully opened file\n");
   while (pcap_next_ex(pcap_file, &Pkt_Header, &pkt_data) != END_OF_PCAP_FILE)
     {
+      pkt_data_pos = 0;
       pkt_data_len = Pkt_Header->len;
-      printf("Packet Length: %u\n", pkt_data_len);
+      printf("Packet Length: %u\n\n", pkt_data_len);
       Ether_Hdr = get_ethernet_hdr((pkt_data+pkt_data_pos));
       print_ethernet_hdr(Ether_Hdr);
       //check for arp
