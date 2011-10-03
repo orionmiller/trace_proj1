@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include "checksum.h"
 
 #define END_OF_PCAP_FILE -2
 
@@ -18,7 +19,10 @@
 #define ARP_HDR_IPV4_SIZE 224 //in bytes
 
 #define IDENTIFCATION_LEN 16
-#define FLAG_LEN 3
+#define FLAGS_LEN 3
+
+
+#define IP_ADDR_SIZ 4 //in bytes
 
 typedef struct {
   unsigned char mac_dst[MAC_ADDR_LEN]; //magic numbers
@@ -26,49 +30,25 @@ typedef struct {
   unsigned short type;
 }ether_hdr;
 
-typedef struct {
-  uint8_t version;
-  uint8_t hdr_len;
-  uint8_t tos[TOS_LEN]; //type_of_service
-  uint8_t ecn[ECN_LEN]; //explicit_congestion_notification
-  uint8_t total_len[TOTAL_LEN_LEN]; //WTF RETARDED #DEFINE
-  uint8_t identification[IDENTIFCATION_LEN];
-  uint8_t flags[FLAG_LEN];
-  uint8_t fragment_offset;
-  uint8_t time_to_live;
-  uint8_t protocol;
-  uint8_t checksum;
-  uint8_t ip_addr_src;
-  uint8_t ip_addr_dst;
-  uint8_t options; //if header length > 5 -- not sure if needed
-  const u_char *data;
-}ip_hdr;
-
-ether_hdr *get_ethernet_hdr(const u_char *pkt_data_pos)
-{
-
-  uint32_t offset = 0;
-  //needs to be redone properly since structures can be padded
-  ip_hdr *Ip_Hdr = safe_malloc(sizeof(ip_hdr));
-
-  memcpy(&(Ip_Hdr->version), pkt_data_pos + offset, sizeof(uint8_t));
-  offset += sizeof(uint8_t);
-
-  memcpy(&(Ip_Hdr->hdr_len), pkt_data_pos + offset, sizeof(uint8_t));
-  offset += sizeof(uint8_t);
-
-  memcpy(&(Ip_Hdr->tos), pkt_data_pos + offset, sizeof(uint8_t)*TOS_LEN);
-  offset += sizeof(uint8_t) * TOS_LEN;
-
-  memcpy(&(Ip_Hdr->ecn), pkt_data_pos + offset, sizeof(uint8_t)*ECN_LEN);
-  offset += sizeof(uint8_t) * ECN_LEN;
+/* typedef struct { */
+/*   uint8_t version; */
+/*   uint8_t hdr_len; */
+/*   uint8_t tos[TOS_LEN]; //type_of_service */
+/*   uint8_t ecn[ECN_LEN]; //explicit_congestion_notification */
+/*   uint8_t total_len[TOTAL_LEN_LEN]; //WTF RETARDED #DEFINE */
+/*   uint8_t id[IDENTIFCATION_LEN]; //identification */
+/*   uint8_t flags[FLAGS_LEN]; */
+/*   uint8_t fragment_offset; */
+/*   uint8_t ttl; //time_to_live */
+/*   uint8_t protocol;  */
+/*   uint8_t checksum; */
+/*   uint8_t ip_addr_src; //wrong size */
+/*   uint8_t ip_addr_dst; //wrong size */
+/*   uint8_t options; //if header length > 5 -- not sure if needed */
+/*   const u_char *data; */
+/* }ip_hdr; */
 
 
-
-
-
-  return Ip_Hdr;
-}
 
 
 typedef struct{
@@ -97,6 +77,122 @@ void *safe_malloc(size_t size)
   return allocated_mem;
 }
 
+#define TCP_SRC_PORT_OFFSET 0
+#define TCP_DST_PORT_OFFSET 2
+#define TCP_SEQ_NUM_OFFSET 4
+#define TCP_ACK_NUM_OFFSET 8
+#define TCP_WINDOW_SIZE_OFFSET 14
+#define TCP_CHKSUM_OFFSET 16
+#define TCP_ECN_OFFSET 12
+#define TCP_ECN_MASK (0x01C0)
+
+typedef struct {
+  uint16_t src_port;
+  uint16_t dst_port;
+  uint32_t seq_num;
+  uint32_t ack_num;
+  uint16_t ecn; //only 3 bits fin and other flags going to have to do some masking stuff
+  uint16_t window_size;
+  uint16_t chksum;
+  //  const u_char *data;
+}tcp_hdr;
+
+
+tcp_hdr *get_tcp_hdr(const u_char *pkt_data_pos)
+{
+  tcp_hdr *Tcp_Hdr = (tcp_hdr *)safe_malloc(sizeof(tcp_hdr));
+  memcpy(&(Tcp_Hdr->src_port), pkt_data_pos + TCP_SRC_PORT_OFFSET, sizeof(uint16_t));
+  Tcp_Hdr->src_port = ntohs(Tcp_Hdr->src_port);  //should make implementation to all conversion taken outside collection into struct
+  memcpy(&(Tcp_Hdr->dst_port), pkt_data_pos + TCP_DST_PORT_OFFSET, sizeof(uint16_t));
+  memcpy(&(Tcp_Hdr->seq_num), pkt_data_pos + TCP_SEQ_NUM_OFFSET, sizeof(uint32_t));
+  memcpy(&(Tcp_Hdr->ack_num), pkt_data_pos + TCP_ACK_NUM_OFFSET, sizeof(uint32_t));
+  memcpy(&(Tcp_Hdr->ecn), pkt_data_pos + TCP_ECN_OFFSET, sizeof(uint16_t));
+  Tcp_Hdr->ecn = TCP_ECN_MASK & Tcp_Hdr->ecn; //double check
+  Tcp_Hdr->ecn = Tcp_Hdr->ecn >> 6; //double check
+  memcpy(&(Tcp_Hdr->window_size), pkt_data_pos + TCP_WINDOW_SIZE_OFFSET, sizeof(uint16_t));
+  memcpy(&(Tcp_Hdr->chksum), pkt_data_pos + TCP_CHKSUM_OFFSET, sizeof(uint16_t));
+
+  return Tcp_Hdr;
+}
+
+void print_tcp_hdr(tcp_hdr *Tcp_Hdr)
+{
+  printf("\tTCP Header\n");
+  printf("\t\tSource Port: %u\n", (unsigned int)Tcp_Hdr->src_port);
+  printf("\t\tDestination Port: \n");
+  printf("\t\tSequence number: \n");
+  printf("\t\tAck Number: \n");
+  printf("\t\tSYN flag: \n");
+  printf("\t\tReset flag: \n");
+  printf("\t\tWindow Size: \n");
+  printf("\t\tChecksum: \n");
+  printf("\n");
+}
+
+#define TCP_PSEUDO_HDR_SIZE 12
+#define TCP_DATAGRAM_OFFSET 12
+
+typedef struct {
+  uint8_t tos; //actually 6 bits
+  uint8_t total_len;
+  uint8_t ttl;
+  uint8_t protocol;
+  uint16_t chksum;
+  uint32_t src_ip;
+  uint32_t dst_ip;
+  const u_char *data;
+  u_char *raw_hdr;
+}ip_hdr;
+
+#define IP_HDR_SIZE 20 //in bytes
+#define TOS_OFFSET 1 //bytes
+#define TOTAL_LEN_OFFSET 2 //bytes
+#define TTL_OFFSET 8 //bytes
+#define PROTOCOL_OFFSET 9 //bytes
+#define CHKSUM_OFFSET 10 //bytes
+#define SRC_IP_OFFSET 12 //bytes
+#define DST_IP_OFFSET 16 //bytes
+#define DATA_OFFSET 20 //bytes
+#define IP_CHKSUM_CORRECT 0
+
+void check_tcp_hdr(const u_char *pkt_data_pos, tcp_hdr *Tcp_Hdr, ip_hdr *Ip_Hdr)
+{
+  uint32_t datagram_size;
+  //  u_char *chksum_datagram = NULL;
+  datagram_size = TCP_PSEUDO_HDR_SIZE + ntohl(Ip_Hdr->total_len) - IP_HDR_SIZE;
+  //  chksum_datagram = (u_char *)calloc(sizeof(u_char), datagram_size);
+  
+  printf("datagram size: %u\n", datagram_size);
+  printf("ip_hdr total len without conversion: %u\n", Ip_Hdr->total_len);
+  printf("ip_hdr total len with conversion: %u\n", ntohl(Ip_Hdr->total_len));
+
+}
+
+
+
+
+
+ip_hdr *get_ip_hdr(const u_char *pkt_data_pos)
+{
+  ip_hdr *Ip_Hdr = (ip_hdr *)safe_malloc(sizeof(ip_hdr));
+  Ip_Hdr->raw_hdr = (u_char *)safe_malloc(sizeof(IP_HDR_SIZE));
+  memcpy(&(Ip_Hdr->tos), pkt_data_pos + TOS_OFFSET, sizeof(uint8_t));
+  Ip_Hdr->tos = Ip_Hdr->tos >> 2;
+  memcpy(&(Ip_Hdr->total_len), pkt_data_pos + TOTAL_LEN_OFFSET, sizeof(uint8_t));
+  memcpy(&(Ip_Hdr->ttl), pkt_data_pos + TTL_OFFSET, sizeof(uint8_t));
+  memcpy(&(Ip_Hdr->protocol), pkt_data_pos + PROTOCOL_OFFSET, sizeof(uint8_t));
+  memcpy(&(Ip_Hdr->chksum), pkt_data_pos + CHKSUM_OFFSET, sizeof(uint16_t));
+  Ip_Hdr->chksum = ntohs(Ip_Hdr->chksum);
+  memcpy(&(Ip_Hdr->src_ip), pkt_data_pos + SRC_IP_OFFSET, sizeof(uint32_t));
+  memcpy(&(Ip_Hdr->dst_ip), pkt_data_pos + DST_IP_OFFSET, sizeof(uint32_t));
+  Ip_Hdr->data = pkt_data_pos + DATA_OFFSET;
+  memcpy(Ip_Hdr->raw_hdr, pkt_data_pos, IP_HDR_SIZE);
+  
+  return Ip_Hdr;
+}
+
+
+
 //Takes in the current PCAP data position
 //takes in the ethernet header and checks to see if is correct
 //if no errors then it copies the data into a struct and returns
@@ -104,15 +200,11 @@ void *safe_malloc(size_t size)
 ether_hdr *get_ethernet_hdr(const u_char *pkt_data_pos)
 {
   //needs to be redone properly since structures can be padded
-  ether_hdr *Ether_Hdr = safe_malloc(ETHER_HDR_SIZE);
+  ether_hdr *Ether_Hdr = (ether_hdr *)safe_malloc(ETHER_HDR_SIZE);
   memcpy(&(*(Ether_Hdr)), pkt_data_pos, ETHER_HDR_SIZE); //used to be set equale to Ether_Hdr
   return Ether_Hdr;
 }
 
-ip_hdr *get_ip_hdr(const u_char *pkt_data_pos)
-{
-  return NULL;
-}
 
 char *print_ip_addr(const u_char *addr_binary)
 {
@@ -120,6 +212,26 @@ char *print_ip_addr(const u_char *addr_binary)
   memcpy(&(in.s_addr), addr_binary, sizeof(uint32_t));
   return inet_ntoa(in);
 }
+
+
+void print_ip_hdr(ip_hdr *Ip_Hdr)
+{
+  printf("\tIP Header\n");
+  printf("\t\tTOS: 0x%X\n", Ip_Hdr->tos);
+  printf("\t\tTTL: %u\n", (uint32_t)Ip_Hdr->ttl);
+  printf("\t\tProtocol: NEED AFUNCTION for dis\n");
+  if (in_cksum((unsigned short int *)Ip_Hdr->raw_hdr, IP_HDR_SIZE) == IP_CHKSUM_CORRECT)
+    {
+    printf("\t\tChecksum: Correct (0x%X)\n", Ip_Hdr->chksum);      
+    }
+  else
+    {
+      printf("\t\tChecksum: Incorrect (0x%X)\n", Ip_Hdr->chksum);
+    }
+  printf("\t\tSender IP: %s\n", print_ip_addr((const u_char *)&(Ip_Hdr->src_ip)));
+  printf("\t\tDest IP: %s\n", print_ip_addr((const u_char *)&(Ip_Hdr->dst_ip)));
+  printf("\n");
+} 
 
 char *print_mac_addr(const u_char *addr_binary)
 {
@@ -190,10 +302,10 @@ typedef struct {
   uint32_t data;
 }udp_hdr;
 
-upd_hdr *get_udp_hdr(const u_char *pkt_data_pos)
+udp_hdr *get_udp_hdr(const u_char *pkt_data_pos)
 {
   uint32_t offset = 0;
-  upd_hdr *Udp_Hdr = safe_malloc(sizeof(udp_hdr));
+  udp_hdr *Udp_Hdr = safe_malloc(sizeof(udp_hdr));
   
   memcpy(&(Udp_Hdr->src_port), pkt_data_pos + offset, sizeof(uint16_t)); //in network order
   offset += sizeof(uint16_t);
@@ -236,7 +348,9 @@ int main(int argc, char *argv[])
   const u_char *pkt_data;
   unsigned int pkt_data_len;
   ether_hdr *Ether_Hdr;
-  arp_hdr *Arp_Hdr;
+  //  arp_hdr *Arp_Hdr;
+  ip_hdr *Ip_Hdr;
+  tcp_hdr *Tcp_Hdr;
 
 
   if (argc != 2) //magic number
@@ -264,9 +378,16 @@ int main(int argc, char *argv[])
       Ether_Hdr = get_ethernet_hdr((pkt_data+pkt_data_pos));
       print_ethernet_hdr(Ether_Hdr);
       //check for arp
-      pkt_data_pos += ETHER_HDR_SIZE; 
-      Arp_Hdr = get_arp_hdr((pkt_data+pkt_data_pos));
-      print_arp_hdr(Arp_Hdr);
+      /* pkt_data_pos += ETHER_HDR_SIZE;  */
+      /* Arp_Hdr = get_arp_hdr((pkt_data+pkt_data_pos)); */
+      /* print_arp_hdr(Arp_Hdr); */
+      pkt_data_pos += ETHER_HDR_SIZE;
+      Ip_Hdr = get_ip_hdr((pkt_data+pkt_data_pos));
+      print_ip_hdr(Ip_Hdr);
+      pkt_data_pos += IP_HDR_SIZE;
+      Tcp_Hdr = get_tcp_hdr((pkt_data+pkt_data_pos));
+      print_tcp_hdr(Tcp_Hdr);
+      check_tcp_hdr(pkt_data+pkt_data_pos, Tcp_Hdr, Ip_Hdr);
     }
   pcap_close(pcap_file);
 
