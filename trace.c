@@ -48,7 +48,28 @@ typedef struct {
 /*   const u_char *data; */
 /* }ip_hdr; */
 
+typedef struct {
+  uint8_t tos; //actually 6 bits
+  uint16_t total_len;
+  uint8_t ttl;
+  uint8_t protocol;
+  uint16_t chksum;
+  uint32_t src_ip;
+  uint32_t dst_ip;
+  const u_char *data;
+  u_char *raw_hdr;
+}ip_hdr;
 
+#define IP_HDR_SIZE 20 //in bytes
+#define TOS_OFFSET 1 //bytes
+#define TOTAL_LEN_OFFSET 2 //bytes
+#define TTL_OFFSET 8 //bytes
+#define PROTOCOL_OFFSET 9 //bytes
+#define CHKSUM_OFFSET 10 //bytes
+#define SRC_IP_OFFSET 12 //bytes
+#define DST_IP_OFFSET 16 //bytes
+#define DATA_OFFSET 20 //bytes
+#define IP_CHKSUM_CORRECT 0
 
 
 typedef struct{
@@ -125,47 +146,72 @@ void print_tcp_hdr(tcp_hdr *Tcp_Hdr)
   printf("\t\tSYN flag: \n");
   printf("\t\tReset flag: \n");
   printf("\t\tWindow Size: \n");
-  printf("\t\tChecksum: \n");
+  printf("\t\tChecksum: 0x%X\n", ntohs(Tcp_Hdr->chksum));
   printf("\n");
 }
 
 #define TCP_PSEUDO_HDR_SIZE 12
 #define TCP_DATAGRAM_OFFSET 12
 
-typedef struct {
-  uint8_t tos; //actually 6 bits
-  uint8_t total_len;
-  uint8_t ttl;
-  uint8_t protocol;
-  uint16_t chksum;
-  uint32_t src_ip;
-  uint32_t dst_ip;
-  const u_char *data;
-  u_char *raw_hdr;
-}ip_hdr;
+#define TCP_PSEUDO_HDR_SRC_ADDR_OFFSET 0
+#define TCP_PSEUDO_HDR_DST_ADDR_OFFSET 4
+#define TCP_PSEUDO_HDR_ZEROS_OFFSET 8
+#define TCP_PSEUDO_HDR_PROTOCOL_OFFSET 9
+#define TCP_PSEUDO_HDR_TCP_LEN_OFFSET 10
 
-#define IP_HDR_SIZE 20 //in bytes
-#define TOS_OFFSET 1 //bytes
-#define TOTAL_LEN_OFFSET 2 //bytes
-#define TTL_OFFSET 8 //bytes
-#define PROTOCOL_OFFSET 9 //bytes
-#define CHKSUM_OFFSET 10 //bytes
-#define SRC_IP_OFFSET 12 //bytes
-#define DST_IP_OFFSET 16 //bytes
-#define DATA_OFFSET 20 //bytes
-#define IP_CHKSUM_CORRECT 0
 
-void check_tcp_hdr(const u_char *pkt_data_pos, tcp_hdr *Tcp_Hdr, ip_hdr *Ip_Hdr)
+
+uint16_t check_tcp_hdr(const u_char *pkt_data_pos, tcp_hdr *Tcp_Hdr, ip_hdr *Ip_Hdr)
 {
-  uint32_t datagram_size;
-  //  u_char *chksum_datagram = NULL;
-  datagram_size = TCP_PSEUDO_HDR_SIZE + ntohl(Ip_Hdr->total_len) - IP_HDR_SIZE;
-  //  chksum_datagram = (u_char *)calloc(sizeof(u_char), datagram_size);
-  
-  printf("datagram size: %u\n", datagram_size);
-  printf("ip_hdr total len without conversion: %u\n", Ip_Hdr->total_len);
-  printf("ip_hdr total len with conversion: %u\n", ntohl(Ip_Hdr->total_len));
+  //  uint32_t datagram_size;
+  u_char *chksum_datagram;
+  uint16_t tcp_len = 0;
+  uint16_t tcp_len_nto = 0;
+  uint16_t tcp_len_no_pseudo = 0;
+  uint8_t zeros = 0;
+  int i;
+  tcp_len = TCP_PSEUDO_HDR_SIZE + ntohs(Ip_Hdr->total_len) - IP_HDR_SIZE;
+  tcp_len_no_pseudo = ntohs(Ip_Hdr->total_len) - IP_HDR_SIZE;
+  tcp_len_nto = htons(tcp_len);
+  chksum_datagram = (u_char *)malloc(tcp_len);
 
+  //CREATE PSEUDO HEADER
+  memcpy(chksum_datagram + TCP_PSEUDO_HDR_SRC_ADDR_OFFSET , &(Ip_Hdr->src_ip), sizeof(uint32_t));
+  memcpy(chksum_datagram + TCP_PSEUDO_HDR_DST_ADDR_OFFSET , &(Ip_Hdr->dst_ip), sizeof(uint32_t));
+  memcpy(chksum_datagram + TCP_PSEUDO_HDR_ZEROS_OFFSET, &(zeros), sizeof(uint8_t));
+  //zeros area was already tacken care of because of calloc
+  memcpy(chksum_datagram + TCP_PSEUDO_HDR_PROTOCOL_OFFSET , &(Ip_Hdr->protocol), sizeof(uint8_t));
+  memcpy(chksum_datagram + TCP_PSEUDO_HDR_TCP_LEN_OFFSET , &(tcp_len_nto), sizeof(uint16_t));
+
+  //DUMP TCP DATAGRAM INTO PSEUDO_HDR+TCP_DATAGRAM
+
+  memcpy(chksum_datagram + TCP_DATAGRAM_OFFSET, pkt_data_pos, tcp_len_no_pseudo);
+
+  //  printf("tcp len nto: 0x%X",tcp_len_nto)
+  //COMPUTE CHECKSUM
+  printf("pseudo header::\n");
+  for (i = 0; i < TCP_PSEUDO_HDR_SIZE; i++)
+    {
+      printf("%X ", chksum_datagram[i]);
+    }
+  printf("\ntcp header::\n");
+  for (i = TCP_PSEUDO_HDR_SIZE; i < TCP_PSEUDO_HDR_SIZE + TCP_PSEUDO_HDR_SIZE; i++)
+    {
+      printf("%X ", chksum_datagram[i]);
+    }
+  printf("\ntcp data::\n");
+  for (i = TCP_PSEUDO_HDR_SIZE + TCP_PSEUDO_HDR_SIZE; i < tcp_len; i++)
+    {
+      printf("%X ", chksum_datagram[i]);
+    }
+  printf("\n");
+
+
+  return in_cksum((u_short *)chksum_datagram, tcp_len);
+
+  //  printf("datagram size: %u\n", datagram_size);
+  //  printf("ip_hdr total len without conversion: %u\n", Ip_Hdr->total_len);
+  //  printf("ip_hdr total len with conversion: %u\n", ntohs(Ip_Hdr->total_len));
 }
 
 
@@ -178,11 +224,11 @@ ip_hdr *get_ip_hdr(const u_char *pkt_data_pos)
   Ip_Hdr->raw_hdr = (u_char *)safe_malloc(sizeof(IP_HDR_SIZE));
   memcpy(&(Ip_Hdr->tos), pkt_data_pos + TOS_OFFSET, sizeof(uint8_t));
   Ip_Hdr->tos = Ip_Hdr->tos >> 2;
-  memcpy(&(Ip_Hdr->total_len), pkt_data_pos + TOTAL_LEN_OFFSET, sizeof(uint8_t));
+  memcpy(&(Ip_Hdr->total_len), pkt_data_pos + TOTAL_LEN_OFFSET, sizeof(uint16_t));
   memcpy(&(Ip_Hdr->ttl), pkt_data_pos + TTL_OFFSET, sizeof(uint8_t));
   memcpy(&(Ip_Hdr->protocol), pkt_data_pos + PROTOCOL_OFFSET, sizeof(uint8_t));
   memcpy(&(Ip_Hdr->chksum), pkt_data_pos + CHKSUM_OFFSET, sizeof(uint16_t));
-  Ip_Hdr->chksum = ntohs(Ip_Hdr->chksum);
+  Ip_Hdr->chksum = ntohs(Ip_Hdr->chksum); //should apply ntohs elsewhere
   memcpy(&(Ip_Hdr->src_ip), pkt_data_pos + SRC_IP_OFFSET, sizeof(uint32_t));
   memcpy(&(Ip_Hdr->dst_ip), pkt_data_pos + DST_IP_OFFSET, sizeof(uint32_t));
   Ip_Hdr->data = pkt_data_pos + DATA_OFFSET;
@@ -219,7 +265,7 @@ void print_ip_hdr(ip_hdr *Ip_Hdr)
   printf("\tIP Header\n");
   printf("\t\tTOS: 0x%X\n", Ip_Hdr->tos);
   printf("\t\tTTL: %u\n", (uint32_t)Ip_Hdr->ttl);
-  printf("\t\tProtocol: NEED AFUNCTION for dis\n");
+  printf("\t\tProtocol: %u\n", Ip_Hdr->protocol); //need a function for human readable
   if (in_cksum((unsigned short int *)Ip_Hdr->raw_hdr, IP_HDR_SIZE) == IP_CHKSUM_CORRECT)
     {
     printf("\t\tChecksum: Correct (0x%X)\n", Ip_Hdr->chksum);      
@@ -387,7 +433,7 @@ int main(int argc, char *argv[])
       pkt_data_pos += IP_HDR_SIZE;
       Tcp_Hdr = get_tcp_hdr((pkt_data+pkt_data_pos));
       print_tcp_hdr(Tcp_Hdr);
-      check_tcp_hdr(pkt_data+pkt_data_pos, Tcp_Hdr, Ip_Hdr);
+      printf("checksum out: %X\n", check_tcp_hdr(pkt_data+pkt_data_pos, Tcp_Hdr, Ip_Hdr));
     }
   pcap_close(pcap_file);
 
