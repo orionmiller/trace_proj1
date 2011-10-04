@@ -28,7 +28,9 @@
 
 #define IP_ADDR_SIZ 4 //in bytes
 
-//IP Hdr
+
+
+//IP HDR
 #define IP_HDR_SIZE 20 //in bytes
 #define TOS_OFFSET 1 //bytes
 #define TOTAL_LEN_OFFSET 2 //bytes
@@ -47,18 +49,45 @@
 #define TCP_ACK_NUM_OFFSET 8
 #define TCP_WINDOW_SIZE_OFFSET 14
 #define TCP_CHKSUM_OFFSET 16
+#define TCP_FLAGS_OFFSET 13
 #define TCP_ECN_OFFSET 12
 #define TCP_ECN_MASK (0x01C0)
+
+//TCP FLAGS MASKS
+#define SYN_FLAG_MASK (0x02)
+#define RST_FLAG_MASK (0x04)
+#define FIN_FLAG_MASK (0x01)
+
 
 //TCP PSEUDO HDR
 #define TCP_PSEUDO_HDR_SIZE 12
 #define TCP_DATAGRAM_OFFSET 12
-
 #define TCP_PSEUDO_HDR_SRC_ADDR_OFFSET 0
 #define TCP_PSEUDO_HDR_DST_ADDR_OFFSET 4
 #define TCP_PSEUDO_HDR_ZEROS_OFFSET 8
 #define TCP_PSEUDO_HDR_PROTOCOL_OFFSET 9
 #define TCP_PSEUDO_HDR_TCP_LEN_OFFSET 10
+
+//ARP HDR
+//opcode
+//src ip
+//src mac
+//dst ip
+//dst mac
+
+//ICMP HDR
+
+//UDP HDR
+
+//PROTOCOL NAME TO OPCODE
+#define ETH_HDR_IP_OPCODE 8 //(0x0800)
+#define ETH_HDR_ARP_OPCODE 1544 //(0x0806)
+#define IP_HDR_TCP_OPCODE 6
+#define IP_HDR_UDP_OPCODE 17
+#define IP_HDR_ICMP_OPCODE 1
+#define ARP_HDR_REQ_OPCODE 256
+#define ARP_HDR_REP_OPCODE 512
+
 
 typedef struct {
   unsigned char mac_dst[MAC_ADDR_LEN]; //magic numbers
@@ -97,12 +126,11 @@ typedef struct {
   uint32_t ack_num;
   uint16_t ecn; //only 3 bits fin and other flags going to have to do some masking stuff
   uint16_t window_size;
+  uint8_t flags;
   uint16_t chksum;
+  uint16_t chksum_pass;
   //  const u_char *data;
 }tcp_hdr;
-
-
-
 
 typedef struct {
   uint16_t src_port;
@@ -113,17 +141,32 @@ typedef struct {
 }udp_hdr;
 
 
-tcp_hdr *get_tcp_hdr(const u_char *pkt_data_pos);
+tcp_hdr *get_tcp_hdr(const u_char *pkt_data_pos, ip_hdr *Ip_Hdr);
+
 void print_tcp_hdr(tcp_hdr *Tcp_Hdr);
+
 uint16_t check_tcp_hdr(const u_char *pkt_data_pos, tcp_hdr *Tcp_Hdr, ip_hdr *Ip_Hdr);
+
 ip_hdr *get_ip_hdr(const u_char *pkt_data_pos);
-ether_hdr *get_ethernet_hdr(const u_char *pkt_data_pos);
-char *print_ip_addr(const u_char *addr_binary);
+
 void print_ip_hdr(ip_hdr *Ip_Hdr);
-char *print_mac_addr(const u_char *addr_binary);
+
+ether_hdr *get_ethernet_hdr(const u_char *pkt_data_pos);
+
 void print_ethernet_hdr(ether_hdr *Ether_Hdr);
+
 arp_hdr *get_arp_hdr(const u_char *pkt_data_pos);
+
 void print_arp_hdr(arp_hdr *Arp_Hdr);
+
 udp_hdr *get_udp_hdr(const u_char *pkt_data_pos);
+
+char *print_mac_addr(const u_char *addr_binary);
+
+char *print_ip_addr(const u_char *addr_binary);
+
 void *safe_malloc(size_t size);
+
+void print_udp_hdr(udp_hdr *Udp_Hdr);
+
 #endif

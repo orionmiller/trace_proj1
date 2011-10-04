@@ -1,10 +1,9 @@
 #include "trace.h"
 
-tcp_hdr *get_tcp_hdr(const u_char *pkt_data_pos)
+tcp_hdr *get_tcp_hdr(const u_char *pkt_data_pos, ip_hdr *Ip_Hdr)
 {
   tcp_hdr *Tcp_Hdr = (tcp_hdr *)safe_malloc(sizeof(tcp_hdr));
   memcpy(&(Tcp_Hdr->src_port), pkt_data_pos + TCP_SRC_PORT_OFFSET, sizeof(uint16_t));
-  Tcp_Hdr->src_port = ntohs(Tcp_Hdr->src_port);  //should make implementation to all conversion taken outside collection into struct
   memcpy(&(Tcp_Hdr->dst_port), pkt_data_pos + TCP_DST_PORT_OFFSET, sizeof(uint16_t));
   memcpy(&(Tcp_Hdr->seq_num), pkt_data_pos + TCP_SEQ_NUM_OFFSET, sizeof(uint32_t));
   memcpy(&(Tcp_Hdr->ack_num), pkt_data_pos + TCP_ACK_NUM_OFFSET, sizeof(uint32_t));
@@ -13,6 +12,9 @@ tcp_hdr *get_tcp_hdr(const u_char *pkt_data_pos)
   Tcp_Hdr->ecn = Tcp_Hdr->ecn >> 6; //double check
   memcpy(&(Tcp_Hdr->window_size), pkt_data_pos + TCP_WINDOW_SIZE_OFFSET, sizeof(uint16_t));
   memcpy(&(Tcp_Hdr->chksum), pkt_data_pos + TCP_CHKSUM_OFFSET, sizeof(uint16_t));
+  memcpy(&(Tcp_Hdr->flags), pkt_data_pos + TCP_FLAGS_OFFSET, sizeof(uint8_t));
+  Tcp_Hdr->chksum_pass = check_tcp_hdr(pkt_data_pos, Tcp_Hdr, Ip_Hdr);
+  //save to structure variable checksum pass or failure
 
   return Tcp_Hdr;
 }
@@ -20,68 +22,50 @@ tcp_hdr *get_tcp_hdr(const u_char *pkt_data_pos)
 void print_tcp_hdr(tcp_hdr *Tcp_Hdr)
 {
   printf("\tTCP Header\n");
-  printf("\t\tSource Port: %u\n", (unsigned int)Tcp_Hdr->src_port);
-  printf("\t\tDestination Port: %u\n",(unsigned int)Tcp_Hdr->dst_port);
-  printf("\t\tSequence number: %u\n", Tcp_Hdr->seq_num);
-  printf("\t\tAck Number: %u\n", Tcp_Hdr->ack_num);
-  printf("\t\tSYN flag: \n");
-  printf("\t\tReset flag: \n");
-  printf("\t\tWindow Size: \n");
-  printf("\t\tChecksum: 0x%X\n", ntohs(Tcp_Hdr->chksum));
-  printf("\n");
+  printf("\t\tSource Port:  %u\n", ntohs(Tcp_Hdr->src_port));
+  printf("\t\tDest Port:  %u\n", ntohs(Tcp_Hdr->dst_port));
+  printf("\t\tSequence Number: %u\n", ntohl(Tcp_Hdr->seq_num));
+  printf("\t\tACK Number: %u\n", ntohl(Tcp_Hdr->ack_num));
+  if (Tcp_Hdr->flags & SYN_FLAG_MASK)
+    printf("\t\tSYN Flag: Yes\n");
+  else
+    printf("\t\tSYN Flag: No\n");
+  if (Tcp_Hdr->flags & RST_FLAG_MASK)
+    printf("\t\tRST Flag: Yes\n");
+  else
+    printf("\t\tRST Flag: No\n");
+  if (Tcp_Hdr->flags & FIN_FLAG_MASK)
+    printf("\t\tFIN Flag: Yes\n");  
+  else
+    printf("\t\tFIN Flag: No\n");  
+  printf("\t\tWindow Size: %u\n", ntohs(Tcp_Hdr->window_size));
+  if (Tcp_Hdr->chksum_pass == 0)
+    printf("\t\tChecksum: Correct (0x%x)\n", ntohs(Tcp_Hdr->chksum));
+  else
+    printf("\t\tChecksum: Incorrect (0x%x)\n", ntohs(Tcp_Hdr->chksum));
 }
 
 uint16_t check_tcp_hdr(const u_char *pkt_data_pos, tcp_hdr *Tcp_Hdr, ip_hdr *Ip_Hdr)
 {
-  //  uint32_t datagram_size;
   u_char *chksum_datagram;
   uint16_t tcp_len = 0;
   uint16_t tcp_len_nto = 0;
   uint16_t tcp_len_no_pseudo = 0;
   uint8_t zeros = 0;
-  int i;
+
   tcp_len = TCP_PSEUDO_HDR_SIZE + ntohs(Ip_Hdr->total_len) - IP_HDR_SIZE;
   tcp_len_no_pseudo = ntohs(Ip_Hdr->total_len) - IP_HDR_SIZE;
   tcp_len_nto = htons(tcp_len_no_pseudo);
   chksum_datagram = (u_char *)malloc(tcp_len);
 
-  //CREATE PSEUDO HEADER
   memcpy(chksum_datagram + TCP_PSEUDO_HDR_SRC_ADDR_OFFSET , &(Ip_Hdr->src_ip), sizeof(uint32_t));
   memcpy(chksum_datagram + TCP_PSEUDO_HDR_DST_ADDR_OFFSET , &(Ip_Hdr->dst_ip), sizeof(uint32_t));
   memcpy(chksum_datagram + TCP_PSEUDO_HDR_ZEROS_OFFSET, &(zeros), sizeof(uint8_t));
-  //zeros area was already tacken care of because of calloc
-  memcpy(chksum_datagram + TCP_PSEUDO_HDR_PROTOCOL_OFFSET , &(Ip_Hdr->protocol), sizeof(uint8_t));
+  memcpy(chksum_datagram + TCP_PSEUDO_HDR_PROTOCOL_OFFSET, &(Ip_Hdr->protocol), sizeof(uint8_t));
   memcpy(chksum_datagram + TCP_PSEUDO_HDR_TCP_LEN_OFFSET , &(tcp_len_nto), sizeof(uint16_t));
-
-  //DUMP TCP DATAGRAM INTO PSEUDO_HDR+TCP_DATAGRAM
-
   memcpy(chksum_datagram + TCP_DATAGRAM_OFFSET, pkt_data_pos, tcp_len_no_pseudo);
 
-  //  printf("tcp len nto: 0x%X",tcp_len_nto)
-  //COMPUTE CHECKSUM
-  printf("pseudo header::\n");
-  for (i = 0; i < TCP_PSEUDO_HDR_SIZE; i++)
-    {
-      printf("%X ", chksum_datagram[i]);
-    }
-  printf("\ntcp header::\n");
-  for (i = TCP_PSEUDO_HDR_SIZE; i < TCP_PSEUDO_HDR_SIZE + TCP_PSEUDO_HDR_SIZE; i++)
-    {
-      printf("%X ", chksum_datagram[i]);
-    }
-  printf("\ntcp data::\n");
-  for (i = TCP_PSEUDO_HDR_SIZE + TCP_PSEUDO_HDR_SIZE; i < tcp_len; i++)
-    {
-      printf("%X ", chksum_datagram[i]);
-    }
-  printf("\n");
-
-
   return in_cksum((u_short *)chksum_datagram, tcp_len);
-
-  //  printf("datagram size: %u\n", datagram_size);
-  //  printf("ip_hdr total len without conversion: %u\n", Ip_Hdr->total_len);
-  //  printf("ip_hdr total len with conversion: %u\n", ntohs(Ip_Hdr->total_len));
 }
 
 
@@ -105,11 +89,6 @@ ip_hdr *get_ip_hdr(const u_char *pkt_data_pos)
 }
 
 
-
-//Takes in the current PCAP data position
-//takes in the ethernet header and checks to see if is correct
-//if no errors then it copies the data into a struct and returns
-//the pointer of the struct
 ether_hdr *get_ethernet_hdr(const u_char *pkt_data_pos)
 {
   //needs to be redone properly since structures can be padded
@@ -130,21 +109,37 @@ char *print_ip_addr(const u_char *addr_binary)
 void print_ip_hdr(ip_hdr *Ip_Hdr)
 {
   printf("\tIP Header\n");
-  printf("\t\tTOS: 0x%X\n", Ip_Hdr->tos);
+  printf("\t\tTOS: 0x%x\n", Ip_Hdr->tos);
   printf("\t\tTTL: %u\n", (uint32_t)Ip_Hdr->ttl);
-  printf("\t\tProtocol: %u\n", Ip_Hdr->protocol); //need a function for human readable
+  switch (Ip_Hdr->protocol)
+    {
+    case IP_HDR_TCP_OPCODE:
+      printf("\t\tProtocol: TCP\n");
+      break;
+
+    case IP_HDR_UDP_OPCODE:
+        printf("\t\tProtocol: UDP\n");
+      break;
+
+    case IP_HDR_ICMP_OPCODE:
+      printf("\t\tProtocol: ICMP\n");
+      break;
+
+    default:
+        printf("\t\tProtocol: Uknown\n");
+      break;
+    }
+
   if (in_cksum((unsigned short int *)Ip_Hdr->raw_hdr, IP_HDR_SIZE) == IP_CHKSUM_CORRECT)
-    {
-    printf("\t\tChecksum: Correct (0x%X)\n", Ip_Hdr->chksum);      
-    }
+    printf("\t\tChecksum: Correct (0x%x)\n", Ip_Hdr->chksum);      
   else
-    {
-      printf("\t\tChecksum: Incorrect (0x%X)\n", Ip_Hdr->chksum);
-    }
+      printf("\t\tChecksum: Incorrect (0x%x)\n", Ip_Hdr->chksum);
+
   printf("\t\tSender IP: %s\n", print_ip_addr((const u_char *)&(Ip_Hdr->src_ip)));
   printf("\t\tDest IP: %s\n", print_ip_addr((const u_char *)&(Ip_Hdr->dst_ip)));
   printf("\n");
 } 
+
 
 char *print_mac_addr(const u_char *addr_binary)
 {
@@ -153,14 +148,29 @@ char *print_mac_addr(const u_char *addr_binary)
   return ether_ntoa(&addr);
 }
 
+
 void print_ethernet_hdr(ether_hdr *Ether_Hdr)
 {
   printf("\tEthernet Header\n");
   printf("\t\tDest MAC: %s\n", print_mac_addr(Ether_Hdr->mac_dst));
   printf("\t\tSource MAC: %s\n",print_mac_addr(Ether_Hdr->mac_src));
-  printf("\t\tType: %u\n", (unsigned int)Ether_Hdr->type); //may cause issues
+  switch (Ether_Hdr->type)
+    {
+    case ETH_HDR_IP_OPCODE:
+      printf("\t\tType: IP\n");
+      break;
+
+    case ETH_HDR_ARP_OPCODE:
+      printf("\t\tType: ARP\n");
+      break;
+
+    default:
+      printf("\t\tType: Unknown\n");
+    }
+
   printf("\n");
 }
+
 
 arp_hdr *get_arp_hdr(const u_char *pkt_data_pos)
 {
@@ -181,13 +191,13 @@ arp_hdr *get_arp_hdr(const u_char *pkt_data_pos)
   memcpy(&(Arp_Hdr->opcode), pkt_data_pos + offset, sizeof(uint16_t));
   offset += sizeof(uint16_t);
   
-  memcpy(&(Arp_Hdr->sha), pkt_data_pos + offset, sizeof(uint32_t));
+  memcpy(&(Arp_Hdr->sha), pkt_data_pos + offset, MAC_ADDR_LEN);
   offset += MAC_ADDR_LEN;
   
   memcpy(&(Arp_Hdr->spa), pkt_data_pos + offset, sizeof(uint32_t));
   offset += sizeof(uint32_t);
 
-  memcpy(&(Arp_Hdr->tha), pkt_data_pos + offset, sizeof(uint32_t));
+  memcpy(&(Arp_Hdr->tha), pkt_data_pos + offset, MAC_ADDR_LEN);
   offset += MAC_ADDR_LEN;
 
   memcpy(&(Arp_Hdr->tpa), pkt_data_pos + offset, sizeof(uint32_t));
@@ -197,8 +207,22 @@ arp_hdr *get_arp_hdr(const u_char *pkt_data_pos)
 
 void print_arp_hdr(arp_hdr *Arp_Hdr)
 {
-  printf("\tARP Header\n");
-  printf("\t\tOpcode: %u\n", (unsigned int)(Arp_Hdr->opcode));
+  printf("\tARP header\n");
+  switch (Arp_Hdr->opcode)
+    {
+    case ARP_HDR_REQ_OPCODE:
+      printf("\t\tOpcode: Request\n");
+      break;
+
+    case ARP_HDR_REP_OPCODE:
+      printf("\t\tOpcode: Reply\n");
+      break;
+
+    default:
+      printf("\t\tUnknown");
+      break;
+    }
+
   printf("\t\tSender MAC: %s\n", print_mac_addr((const u_char *)&(Arp_Hdr->sha)));
   printf("\t\tSender IP: %s\n", print_ip_addr((const u_char *)&(Arp_Hdr->spa)));
   printf("\t\tTarget MAC: %s\n", print_mac_addr((const u_char *)&(Arp_Hdr->tha)));
@@ -228,6 +252,13 @@ udp_hdr *get_udp_hdr(const u_char *pkt_data_pos)
   return Udp_Hdr;
 }
 
+void print_udp_hdr(udp_hdr *Udp_Hdr)
+{
+  printf("\tUDP Header\n");
+  printf("\t\tSource Port:  %u\n", ntohs(Udp_Hdr->src_port));
+  printf("\t\tDest Port:  %u\n", ntohs(Udp_Hdr->dst_port));
+}
+
 void *safe_malloc(size_t size)
 {
   void *allocated_mem;
@@ -238,3 +269,5 @@ void *safe_malloc(size_t size)
     }
   return allocated_mem;
 }
+
+

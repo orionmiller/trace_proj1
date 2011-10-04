@@ -12,9 +12,11 @@ int main(int argc, char *argv[])
   const u_char *pkt_data;
   unsigned int pkt_data_len;
   ether_hdr *Ether_Hdr;
-  //  arp_hdr *Arp_Hdr;
+  arp_hdr *Arp_Hdr;
   ip_hdr *Ip_Hdr;
   tcp_hdr *Tcp_Hdr;
+  udp_hdr *Udp_Hdr;
+  int num_pkt = 1;
 
 
   if (argc != 2) //magic number
@@ -35,29 +37,61 @@ int main(int argc, char *argv[])
 
   while (pcap_next_ex(pcap_file, &Pkt_Header, &pkt_data) != END_OF_PCAP_FILE)
     {
-      offset = 0;
       pkt_data_len = Pkt_Header->len;
-      printf("Packet Length: %u\n\n", pkt_data_len);
+      printf("\nPacket number: %d  Packet Len: %u\n\n", num_pkt, pkt_data_len);
+      //GET DATA
+      offset = 0;
       Ether_Hdr = get_ethernet_hdr((pkt_data+offset));
       print_ethernet_hdr(Ether_Hdr);
-      //check for arp
-      /* offset += ETHER_HDR_SIZE;  */
-      /* Arp_Hdr = get_arp_hdr((pkt_data+offset)); */
-      /* print_arp_hdr(Arp_Hdr); */
       offset += ETHER_HDR_SIZE;
-      Ip_Hdr = get_ip_hdr((pkt_data+offset));
 
-      print_ip_hdr(Ip_Hdr);
-      offset += IP_HDR_SIZE;
-      Tcp_Hdr = get_tcp_hdr((pkt_data+offset));
-      print_tcp_hdr(Tcp_Hdr);
-      printf("checksum out: %X\n", check_tcp_hdr(pkt_data+offset, Tcp_Hdr, Ip_Hdr));
+      switch (Ether_Hdr->type)
+	{
+	  
+	case ETH_HDR_IP_OPCODE:
+	  Ip_Hdr = get_ip_hdr((pkt_data+offset));
+	  offset += IP_HDR_SIZE;
+	  print_ip_hdr(Ip_Hdr);
+
+	  switch (Ip_Hdr->protocol)
+	    {
+	    case IP_HDR_TCP_OPCODE:
+	      Tcp_Hdr = get_tcp_hdr((pkt_data+offset), Ip_Hdr);
+	      print_tcp_hdr(Tcp_Hdr);
+	      break;
+
+	    case IP_HDR_UDP_OPCODE:
+	      Udp_Hdr = get_udp_hdr(pkt_data+offset);
+	      print_udp_hdr(Udp_Hdr);
+	      break;
+
+	    case IP_HDR_ICMP_OPCODE:
+	      printf("ICMP PACKET\n");
+	      break;
+		    
+	    default:
+	      break;
+	    }
+	  break;
+
+	case ETH_HDR_ARP_OPCODE:
+	  Arp_Hdr = get_arp_hdr((pkt_data+offset));
+	  print_arp_hdr(Arp_Hdr);
+
+	  break;
+	  
+	default:
+	  printf("NOT THERE\n\n");
+	  break;
+	}
+
+      num_pkt++;
     }
   pcap_close(pcap_file);
 
-  //-------------------
-  //DONT FORGET TO WORRY ABOUT MEMORY LEAQUES
-  //-------------------
+  //-----------------------------------------//
+  //DONT FORGET TO WORRY ABOUT MEMORY LEAQUES//
+  //-----------------------------------------//
    
   return EXIT_SUCCESS;
 }
