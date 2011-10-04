@@ -86,6 +86,13 @@
 #define ICMP_HDR_REQ_OPCODE 8
 #define ICMP_HDR_REP_OPCODE 0
 
+//SERVICE NAME TO PORT NUM
+#define HTTP 80
+#define TELNET 23
+#define FTP 21
+#define POP3 110
+#define SMTP 25
+
 
 
 typedef struct {

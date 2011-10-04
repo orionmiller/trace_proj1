@@ -22,8 +22,61 @@ tcp_hdr *get_tcp_hdr(const u_char *pkt_data_pos, ip_hdr *Ip_Hdr)
 void print_tcp_hdr(tcp_hdr *Tcp_Hdr)
 {
   printf("\tTCP Header\n");
-  printf("\t\tSource Port:  %u\n", ntohs(Tcp_Hdr->src_port));
-  printf("\t\tDest Port:  %u\n", ntohs(Tcp_Hdr->dst_port));
+
+  switch (ntohs(Tcp_Hdr->src_port))
+    {
+    case HTTP:
+      printf("\t\tSource Port: HTTP\n");
+      break;
+
+    case TELNET:
+      printf("\t\tSource Port: TELNET\n");
+      break;
+
+    case FTP:
+      printf("\t\tSource Port: FTP\n");
+      break;
+
+    case POP3:
+      printf("\t\tSource Port: POP3\n");
+      break;
+
+    case SMTP:
+      printf("\t\tSource Port: SMTP\n");
+      break;
+
+    default:
+      printf("\t\tSource Port:  %u\n", ntohs(Tcp_Hdr->src_port));
+      break;
+    }
+
+  switch (ntohs(Tcp_Hdr->dst_port))
+    {
+    case HTTP:
+      printf("\t\tDest Port: HTTP\n");
+      break;
+
+    case TELNET:
+      printf("\t\tDest Port: TELNET\n");
+      break;
+
+    case FTP:
+      printf("\t\tDest Port: FTP\n");
+      break;
+
+    case POP3:
+      printf("\t\tDest Port: POP3\n");
+      break;
+
+    case SMTP:
+      printf("\t\tDest Port: SMTP\n");
+      break;
+
+    default:
+      printf("\t\tDest Port:  %u\n", ntohs(Tcp_Hdr->dst_port));
+      break;
+    }
+
   printf("\t\tSequence Number: %u\n", ntohl(Tcp_Hdr->seq_num));
   printf("\t\tACK Number: %u\n", ntohl(Tcp_Hdr->ack_num));
   if (Tcp_Hdr->flags & SYN_FLAG_MASK)
@@ -261,10 +314,17 @@ void print_udp_hdr(udp_hdr *Udp_Hdr)
 
 icmp_hdr *get_icmp_hdr(const u_char *pkt_data_pos)
 {
+  //  int i;
   icmp_hdr *Icmp_Hdr = safe_malloc(sizeof(icmp_hdr));
   memcpy(&(Icmp_Hdr->type), pkt_data_pos + ICMP_TYPE_HDR_OFFSET, sizeof(uint8_t));
   memcpy(&(Icmp_Hdr->code), pkt_data_pos + ICMP_CODE_HDR_OFFSET, sizeof(uint8_t));
 
+  /* for (i = 0; i < 64; i++) */
+  /*   { */
+  /*     printf("%X ", pkt_data_pos[i]); */
+  /*   } */
+  /* printf("\n"); */
+  
   return Icmp_Hdr;
 }
 
@@ -274,15 +334,17 @@ void print_icmp_hdr(icmp_hdr *Icmp_Hdr)
   switch (Icmp_Hdr->type)
     {
     case ICMP_HDR_REQ_OPCODE:
+      //      printf("\t\tType: Request %u\n", Icmp_Hdr->type);
       printf("\t\tType: Request\n");
       break;
 
     case ICMP_HDR_REP_OPCODE:
+      //      printf("\t\tType: Reply %u\n", Icmp_Hdr->type);
       printf("\t\tType: Reply\n");
       break;
 
     default:
-      printf("\t\tType: Unknonw\n");
+      printf("\t\tType: Unknown %u\n", Icmp_Hdr->type);
       break;
     }
 }
