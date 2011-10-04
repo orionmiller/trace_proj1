@@ -73,7 +73,10 @@
 #define ICMP_TYPE_HDR_OFFSET 0
 #define ICMP_CODE_HDR_OFFSET 1
 
-//UDP HDR
+//ETHERNET HDR
+#define ETHER_DST_MAC_ADDR_OFFSET 0
+#define ETHER_SRC_MAC_ADDR_OFFSET 6
+#define ETHER_TYPE_OFFSET 12
 
 //PROTOCOL NAME TO OPCODE
 #define ETH_HDR_IP_OPCODE 8 //(0x0800)
@@ -96,9 +99,9 @@
 
 
 typedef struct {
-  unsigned char mac_dst[MAC_ADDR_LEN]; //magic numbers
-  unsigned char mac_src[MAC_ADDR_LEN];
-  unsigned short type;
+  uint8_t mac_dst[MAC_ADDR_LEN]; //magic numbers
+  uint8_t mac_src[MAC_ADDR_LEN];
+  uint16_t type;
 }ether_hdr;
 
 typedef struct {

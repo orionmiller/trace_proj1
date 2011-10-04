@@ -59,16 +59,25 @@ int main(int argc, char *argv[])
 	    case IP_HDR_TCP_OPCODE:
 	      Tcp_Hdr = get_tcp_hdr((pkt_data+offset), Ip_Hdr);
 	      print_tcp_hdr(Tcp_Hdr);
+	      free(Tcp_Hdr);
+	      free(Ip_Hdr->raw_hdr);
+	      free(Ip_Hdr);
 	      break;
 
 	    case IP_HDR_UDP_OPCODE:
 	      Udp_Hdr = get_udp_hdr(pkt_data+offset);
 	      print_udp_hdr(Udp_Hdr);
+	      free(Udp_Hdr);
+	      free(Ip_Hdr->raw_hdr);
+	      free(Ip_Hdr);
 	      break;
 
 	    case IP_HDR_ICMP_OPCODE:
 	      Icmp_Hdr = get_icmp_hdr((pkt_data+offset));
 	      print_icmp_hdr(Icmp_Hdr);
+	      free(Icmp_Hdr);
+	      free(Ip_Hdr->raw_hdr);
+	      free(Ip_Hdr);
 	      break;
 		    
 	    default:
@@ -79,6 +88,7 @@ int main(int argc, char *argv[])
 	case ETH_HDR_ARP_OPCODE:
 	  Arp_Hdr = get_arp_hdr((pkt_data+offset));
 	  print_arp_hdr(Arp_Hdr);
+	  free(Arp_Hdr);
 
 	  break;
 	  
@@ -87,6 +97,7 @@ int main(int argc, char *argv[])
 	  break;
 	}
 
+      free(Ether_Hdr);
       num_pkt++;
     }
   pcap_close(pcap_file);

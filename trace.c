@@ -104,6 +104,7 @@ uint16_t check_tcp_hdr(const u_char *pkt_data_pos, tcp_hdr *Tcp_Hdr, ip_hdr *Ip_
   uint16_t tcp_len = 0;
   uint16_t tcp_len_nto = 0;
   uint16_t tcp_len_no_pseudo = 0;
+  uint16_t chksum;
   uint8_t zeros = 0;
 
   tcp_len = TCP_PSEUDO_HDR_SIZE + ntohs(Ip_Hdr->total_len) - IP_HDR_SIZE;
@@ -118,7 +119,9 @@ uint16_t check_tcp_hdr(const u_char *pkt_data_pos, tcp_hdr *Tcp_Hdr, ip_hdr *Ip_
   memcpy(chksum_datagram + TCP_PSEUDO_HDR_TCP_LEN_OFFSET , &(tcp_len_nto), sizeof(uint16_t));
   memcpy(chksum_datagram + TCP_DATAGRAM_OFFSET, pkt_data_pos, tcp_len_no_pseudo);
 
-  return in_cksum((u_short *)chksum_datagram, tcp_len);
+  chksum = in_cksum((u_short *)chksum_datagram, tcp_len);
+  free(chksum_datagram);
+  return chksum;
 }
 
 
@@ -127,7 +130,6 @@ ip_hdr *get_ip_hdr(const u_char *pkt_data_pos)
   ip_hdr *Ip_Hdr = (ip_hdr *)safe_malloc(sizeof(ip_hdr));
   Ip_Hdr->raw_hdr = (u_char *)safe_malloc(sizeof(IP_HDR_SIZE));
   memcpy(&(Ip_Hdr->tos), pkt_data_pos + TOS_OFFSET, sizeof(uint8_t));
-  Ip_Hdr->tos = Ip_Hdr->tos >> 2;
   memcpy(&(Ip_Hdr->total_len), pkt_data_pos + TOTAL_LEN_OFFSET, sizeof(uint16_t));
   memcpy(&(Ip_Hdr->ttl), pkt_data_pos + TTL_OFFSET, sizeof(uint8_t));
   memcpy(&(Ip_Hdr->protocol), pkt_data_pos + PROTOCOL_OFFSET, sizeof(uint8_t));
@@ -144,9 +146,10 @@ ip_hdr *get_ip_hdr(const u_char *pkt_data_pos)
 
 ether_hdr *get_ethernet_hdr(const u_char *pkt_data_pos)
 {
-  //needs to be redone properly since structures can be padded
-  ether_hdr *Ether_Hdr = (ether_hdr *)safe_malloc(ETHER_HDR_SIZE);
-  memcpy(&(*(Ether_Hdr)), pkt_data_pos, ETHER_HDR_SIZE); //used to be set equale to Ether_Hdr
+  ether_hdr *Ether_Hdr = (ether_hdr *)safe_malloc(sizeof(ether_hdr));
+  memcpy(&(Ether_Hdr->mac_dst), pkt_data_pos + ETHER_DST_MAC_ADDR_OFFSET, MAC_ADDR_LEN);
+  memcpy(&(Ether_Hdr->mac_src), pkt_data_pos + ETHER_SRC_MAC_ADDR_OFFSET, MAC_ADDR_LEN);
+  memcpy(&(Ether_Hdr->type), pkt_data_pos + ETHER_TYPE_OFFSET, sizeof(uint16_t));
   return Ether_Hdr;
 }
 
@@ -179,7 +182,7 @@ void print_ip_hdr(ip_hdr *Ip_Hdr)
       break;
 
     default:
-        printf("\t\tProtocol: Uknown\n");
+        printf("\t\tProtocol: Unknown\n");
       break;
     }
 
@@ -314,16 +317,9 @@ void print_udp_hdr(udp_hdr *Udp_Hdr)
 
 icmp_hdr *get_icmp_hdr(const u_char *pkt_data_pos)
 {
-  //  int i;
   icmp_hdr *Icmp_Hdr = safe_malloc(sizeof(icmp_hdr));
   memcpy(&(Icmp_Hdr->type), pkt_data_pos + ICMP_TYPE_HDR_OFFSET, sizeof(uint8_t));
   memcpy(&(Icmp_Hdr->code), pkt_data_pos + ICMP_CODE_HDR_OFFSET, sizeof(uint8_t));
-
-  /* for (i = 0; i < 64; i++) */
-  /*   { */
-  /*     printf("%X ", pkt_data_pos[i]); */
-  /*   } */
-  /* printf("\n"); */
   
   return Icmp_Hdr;
 }
@@ -334,12 +330,10 @@ void print_icmp_hdr(icmp_hdr *Icmp_Hdr)
   switch (Icmp_Hdr->type)
     {
     case ICMP_HDR_REQ_OPCODE:
-      //      printf("\t\tType: Request %u\n", Icmp_Hdr->type);
       printf("\t\tType: Request\n");
       break;
 
     case ICMP_HDR_REP_OPCODE:
-      //      printf("\t\tType: Reply %u\n", Icmp_Hdr->type);
       printf("\t\tType: Reply\n");
       break;
 
