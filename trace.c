@@ -128,7 +128,7 @@ uint16_t check_tcp_hdr(const u_char *pkt_data_pos, tcp_hdr *Tcp_Hdr, ip_hdr *Ip_
 ip_hdr *get_ip_hdr(const u_char *pkt_data_pos)
 {
   ip_hdr *Ip_Hdr = (ip_hdr *)safe_malloc(sizeof(ip_hdr));
-  Ip_Hdr->raw_hdr = (u_char *)safe_malloc(sizeof(IP_HDR_SIZE));
+  Ip_Hdr->raw_hdr = (u_char *)safe_malloc(IP_HDR_SIZE);
   memcpy(&(Ip_Hdr->tos), pkt_data_pos + TOS_OFFSET, sizeof(uint8_t));
   memcpy(&(Ip_Hdr->total_len), pkt_data_pos + TOTAL_LEN_OFFSET, sizeof(uint16_t));
   memcpy(&(Ip_Hdr->ttl), pkt_data_pos + TTL_OFFSET, sizeof(uint8_t));
