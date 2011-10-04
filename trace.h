@@ -76,6 +76,8 @@
 //dst mac
 
 //ICMP HDR
+#define ICMP_TYPE_HDR_OFFSET 0
+#define ICMP_CODE_HDR_OFFSET 1
 
 //UDP HDR
 
@@ -140,6 +142,11 @@ typedef struct {
   uint32_t data;
 }udp_hdr;
 
+typedef struct {
+  uint8_t type;
+  uint8_t code;
+}icmp_hdr;
+
 
 tcp_hdr *get_tcp_hdr(const u_char *pkt_data_pos, ip_hdr *Ip_Hdr);
 
@@ -168,5 +175,9 @@ char *print_ip_addr(const u_char *addr_binary);
 void *safe_malloc(size_t size);
 
 void print_udp_hdr(udp_hdr *Udp_Hdr);
+
+icmp_hdr *get_icmp_hdr(const u_char *pkt_data_pos);
+
+void print_icmp_hdr(icmp_hdr *Icmp_Hdr);
 
 #endif

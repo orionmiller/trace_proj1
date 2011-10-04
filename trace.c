@@ -259,6 +259,21 @@ void print_udp_hdr(udp_hdr *Udp_Hdr)
   printf("\t\tDest Port:  %u\n", ntohs(Udp_Hdr->dst_port));
 }
 
+icmp_hdr *get_icmp_hdr(const u_char *pkt_data_pos)
+{
+  icmp_hdr *Icmp_Hdr = safe_malloc(sizeof(icmp_hdr));
+  memcpy(&(Icmp_Hdr->type), pkt_data_pos + ICMP_TYPE_HDR_OFFSET, sizeof(uint8_t));
+  memcpy(&(Icmp_Hdr->code), pkt_data_pos + ICMP_CODE_HDR_OFFSET, sizeof(uint8_t));
+
+  return Icmp_Hdr;
+}
+
+void print_icmp_hdr(icmp_hdr *Icmp_Hdr)
+{
+  printf("\tICMP Header\n");
+  printf("\t\tType: %u\n", Icmp_Hdr->type);
+}
+
 void *safe_malloc(size_t size)
 {
   void *allocated_mem;

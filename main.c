@@ -16,6 +16,7 @@ int main(int argc, char *argv[])
   ip_hdr *Ip_Hdr;
   tcp_hdr *Tcp_Hdr;
   udp_hdr *Udp_Hdr;
+  icmp_hdr *Icmp_Hdr;
   int num_pkt = 1;
 
 
@@ -66,7 +67,8 @@ int main(int argc, char *argv[])
 	      break;
 
 	    case IP_HDR_ICMP_OPCODE:
-	      printf("ICMP PACKET\n");
+	      Icmp_Hdr = get_icmp_hdr((pkt_data+offset));
+	      print_icmp_hdr(Icmp_Hdr);
 	      break;
 		    
 	    default:
