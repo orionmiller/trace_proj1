@@ -68,12 +68,6 @@
 #define TCP_PSEUDO_HDR_PROTOCOL_OFFSET 9
 #define TCP_PSEUDO_HDR_TCP_LEN_OFFSET 10
 
-//ARP HDR
-//opcode
-//src ip
-//src mac
-//dst ip
-//dst mac
 
 //ICMP HDR
 #define ICMP_TYPE_HDR_OFFSET 0
@@ -89,6 +83,9 @@
 #define IP_HDR_ICMP_OPCODE 1
 #define ARP_HDR_REQ_OPCODE 256
 #define ARP_HDR_REP_OPCODE 512
+#define ICMP_HDR_REQ_OPCODE 8
+#define ICMP_HDR_REP_OPCODE 0
+
 
 
 typedef struct {

@@ -271,7 +271,20 @@ icmp_hdr *get_icmp_hdr(const u_char *pkt_data_pos)
 void print_icmp_hdr(icmp_hdr *Icmp_Hdr)
 {
   printf("\tICMP Header\n");
-  printf("\t\tType: %u\n", Icmp_Hdr->type);
+  switch (Icmp_Hdr->type)
+    {
+    case ICMP_HDR_REQ_OPCODE:
+      printf("\t\tType: Request\n");
+      break;
+
+    case ICMP_HDR_REP_OPCODE:
+      printf("\t\tType: Reply\n");
+      break;
+
+    default:
+      printf("\t\tType: Unknonw\n");
+      break;
+    }
 }
 
 void *safe_malloc(size_t size)
