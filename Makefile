@@ -11,8 +11,8 @@ OS =Linux
 
 all: trace
 
-trace: trace.c
-	$(CC) $(CFLAGS) $(OSINC) $(OSLIB) $(OSDEF) -lpcap -o $@ trace.c checksum.c
+trace: trace.c main.c
+	$(CC) $(CFLAGS) $(OSINC) $(OSLIB) $(OSDEF) -lpcap -o $@ trace.c checksum.c main.c
 
 clean:
-	rm -f trace-*
+	rm -f *~
